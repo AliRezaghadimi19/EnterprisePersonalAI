@@ -1,0 +1,29 @@
+# Keep the Docker build context lean and secure
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Local database files (container uses PostgreSQL, never ship local SQLite)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Environment / secrets (injected via env_file in docker-compose)
+.env
+.env.local
+
+# Uploads are persisted in a named volume, not baked into the image
+uploads/
+
+# IDE / OS noise
+.vscode/
+.idea/
+.DS_Store
+*.log
