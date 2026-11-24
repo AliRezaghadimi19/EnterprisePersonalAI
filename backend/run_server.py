@@ -655,7 +655,25 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         path = url.path
         user = self._get_bearer_user()
-        if not user or user.get("role_name") not in ("super_admin", "system_admin"):
+        if not user:
+            return self._send_json(401, {"success": False, "message": "احراز هویت الزامی است."})
+        is_admin = user.get("role_name") in ("super_admin", "system_admin")
+
+        # Delete Chat Conversation:
+        #   - user deletes own conversation  → soft delete (hidden from user, kept for admin)
+        #   - admin deletes any conversation → permanent delete + audit
+        if path.startswith('/api/v1/chat/conversations/'):
+            conv_id = path.split('/')[-1]
+            try:
+                if is_admin and user["id"] != chat_service.get_conversation_owner(conv_id):
+                    chat_service.admin_delete_conversation(conv_id, actor_user=user)
+                else:
+                    chat_service.delete_conversation(conv_id, user["id"])
+                return self._send_json(200, {"success": True, "message": "گفتگو با موفقیت حذف شد."})
+            except PersianAppException as e:
+                return self._send_json(e.status_code, e.detail)
+
+        if not is_admin:
             return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
 
         # Delete User
@@ -723,11 +741,11 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
             except PersianAppException as e:
                 return self._send_json(e.status_code, e.detail)
 
-        # Delete Chat Conversation
+        # Delete Chat Conversation (admin deleting another user's conversation does hard delete)
         if path.startswith('/api/v1/chat/conversations/'):
             conv_id = path.split('/')[-1]
             try:
-                chat_service.delete_conversation(conv_id, user["id"])
+                chat_service.admin_delete_conversation(conv_id, actor_user=user)
                 return self._send_json(200, {"success": True, "message": "گفتگو با موفقیت حذف شد."})
             except PersianAppException as e:
                 return self._send_json(e.status_code, e.detail)

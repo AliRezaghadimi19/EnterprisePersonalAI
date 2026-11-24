@@ -92,6 +92,7 @@ export interface AdminConversation {
   last_message_preview: string | null;
   created_at: string;
   updated_at: string;
+  deleted_by_user?: boolean;
 }
 
 export interface PagedConversations {

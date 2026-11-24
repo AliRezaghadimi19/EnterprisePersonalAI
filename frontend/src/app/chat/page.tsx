@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Trash2 } from 'lucide-react';
 
 /**
  * صفحه چت سازمانی — گفتگو با مدل‌های هوش مصنوعی از طریق بک‌اند
@@ -99,6 +100,21 @@ export default function ChatPage() {
     } catch { /* ignore */ }
   }
 
+    async function deleteConversation(id: string) {
+    const conv = conversations.find((c) => c.id === id);
+    if (!window.confirm(`آیا از حذف گفتگوی «${conv?.title || 'بدون عنوان'}» مطمئن هستید؟ این گفتگو از فهرست شما حذف می‌شود.`)) return;
+    try {
+      const res = await fetch(`${API_URL}/chat/conversations/${id}`, { method: 'DELETE', headers: authHeaders() });
+      if (res.ok) {
+        setConversations((c) => c.filter((x) => x.id !== id));
+        if (activeId === id) {
+          setActiveId(null);
+          setMessages([]);
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
   async function send() {
     const content = input.trim();
     if (!content || sending) return;
@@ -185,15 +201,24 @@ export default function ChatPage() {
         </button>
         <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-1">
           {conversations.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => openConversation(c.id)}
-              className={`w-full text-right rounded-xl px-3 py-2.5 text-sm truncate transition ${
-                activeId === c.id ? 'bg-blue-600/20 text-blue-200' : 'hover:bg-slate-800 text-slate-300'
-              }`}
-            >
-              {c.title}
-            </button>
+            <div key={c.id} className="group relative">
+              <button
+                onClick={() => openConversation(c.id)}
+                className={`w-full text-right rounded-xl pl-9 pr-3 py-2.5 text-sm truncate transition ${
+                  activeId === c.id ? 'bg-blue-600/20 text-blue-200' : 'hover:bg-slate-800 text-slate-300'
+                }`}
+              >
+                {c.title}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
+                title="حذف گفتگو"
+                aria-label={`حذف ${c.title}`}
+                className="absolute left-2 top-1/2 -translate-y-1/2 hidden group-hover:block rounded-lg p-1.5 text-slate-500 hover:bg-red-500/15 hover:text-red-400 transition"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           ))}
           {conversations.length === 0 && !loading && (
             <p className="text-xs text-slate-500 px-3 py-2">هنوز گفتگویی ندارید.</p>

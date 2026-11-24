@@ -21,15 +21,21 @@ from app.core.config import settings
 class StandaloneDB:
     """Lightweight SQLite-backed relational engine for standalone execution."""
     _instance = None
-    
+
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
-            # Use SQLite file in backend root
-            backend_dir = Path(__file__).resolve().parent.parent.parent
-            self.db_path = str(backend_dir / "enterprise_ai.db")
+            # Env override first (Docker volume), then SQLite file in backend root
+            env_path = os.environ.get("DB_PATH")
+            if env_path:
+                self.db_path = env_path
+            else:
+                backend_dir = Path(__file__).resolve().parent.parent.parent
+                self.db_path = str(backend_dir / "enterprise_ai.db")
         else:
             self.db_path = db_path
-            
+        # Ensure the parent directory exists (Docker volume mount points)
+        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+
         self._init_sqlite_schema()
 
     def get_connection(self) -> sqlite3.Connection:
@@ -227,6 +233,7 @@ class StandaloneDB:
             is_pinned INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            deleted_at TEXT,
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         )
         """)
@@ -283,8 +290,20 @@ class StandaloneDB:
         conn.commit()
         conn.close()
 
+    def _migrate(self):
+        """Lightweight idempotent migrations for schema evolution."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        # conversations.deleted_at — user-side soft delete (admin history is unaffected)
+        cols = [r[1] for r in cursor.execute("PRAGMA table_info(conversations)").fetchall()]
+        if 'deleted_at' not in cols:
+            cursor.execute("ALTER TABLE conversations ADD COLUMN deleted_at TEXT")
+        conn.commit()
+        conn.close()
+
 # Global database instance
 db = StandaloneDB()
+db._migrate()
 
 def get_db_connection() -> sqlite3.Connection:
     """Dependency / helper to get an active database connection."""

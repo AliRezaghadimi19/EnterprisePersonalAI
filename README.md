@@ -8,9 +8,7 @@
 |---|---|---|
 | Backend | Python 3.11 + FastAPI + Uvicorn | 8000 |
 | Frontend | Next.js 14 + Tailwind CSS (RTL, Vazirmatn) | 3000 |
-| Database | PostgreSQL 16 + pgvector | 5432 |
-| Cache / Rate Limit | Redis 7.2 | 6379 |
-| Object Storage | MinIO (سازگار با S3) | 9000 / 9001 |
+| Database | SQLite (تعبیه‌شده، سوارشده روی volume داکر) | — |
 
 ## اجرای سریع با داکر
 
@@ -23,7 +21,7 @@ docker compose up -d --build
 
 # 3) بررسی سلامت
 docker compose ps
-curl http://localhost:8000/health
+curl http://localhost:8000/api/v1/health
 ```
 
 سپس مرورگر را باز کنید:
@@ -39,6 +37,33 @@ curl http://localhost:8000/health
 
 ⚠️ در محیط عملیاتی حتماً مقدارهای `SUPER_ADMIN_PASSWORD`، `SECRET_KEY` و `FERNET_KEY` را در فایل `.env` تغییر دهید.
 
+### اجرای داکر - نکات
+
+- **پایگاه داده**: SQLite روی volume داکر (`backend_data`) ذخیره می‌شود — داده‌ها بین ری‌استارت و ری‌بیلد کانتینر باقی می‌مانند.
+- **مسیر دیتابیس**: متغیر `DB_PATH` (پیش‌فرض `/data/enterprise_ai.db`) در کانتینر.
+- **آدرس API فرانت**: در زمان build از `NEXT_PUBLIC_API_URL` در compose خوانده می‌شود. اگر می‌خواهید فرانت روی سرور دیگری به بک‌اند وصل شود، این متغیر را در `.env` تغییر دهید و دوباره بیلد کنید.
+- **ورود به کانتینر بک‌اند** (برای خطایابی یا دسترسی مستقیم به دیتابیس):
+  ```bash
+  docker compose exec backend bash
+  docker compose exec backend sqlite3 /data/enterprise_ai.db
+  ```
+- **استاپ و پاک‌سازی کامل**:
+  ```bash
+  docker compose down          # توقف کانتینرها (داده‌ها باقی می‌مانند)
+  docker compose down -v       # توقف و حذف کامل داده‌ها
+  ```
+
+### رفتار سیاست‌های پاسخ‌دهی
+
+- **FREE_AI**: کاربر می‌تواند هر سؤالی بپرسد — خارج از پایگاه دانش هم پاسخ می‌گیرد.
+- **HYBRID**: اگر پایگاه دانش جواب در دامنه‌ای داشته باشد، از آن استفاده می‌شود؛ در غیر این صورت مدل آزادانه پاسخ می‌دهد.
+- **KNOWLEDGE_ONLY**: کاربر فقط از پایگاه دانش پاسخ می‌گیرد؛ سؤالات خارج از دامنه رد می‌شوند.
+
+### حذف گفتگو
+
+- کاربر می‌تواند گفتگوهای خودش را حذف کند (دکمه حذف با hover در لیست گفتگوها) — گفتگو برای کاربر مخفی می‌شود اما برای ادمین در بخش «مکالمات» با نشان «حذف‌شده توسط کاربر» باقی می‌ماند.
+- ادمین می‌تواند گفتگو را به‌طور کامل حذف کند (حذف فیزیکی از دیتابیس).
+
 ## اجرای بدون داکر (حالت مستقل)
 
 بک‌اند به‌صورت مستقل با SQLite هم اجرا می‌شود (بدون نیاز به هیچ وابستگی خارجی):
@@ -48,6 +73,13 @@ cd backend
 python run_server.py          # سرور مستقل روی http://localhost:8000
 # یا با FastAPI:
 uvicorn app.main:app --port 8000
+```
+
+و فرانت‌اند:
+
+```bash
+cd frontend
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1 npm run dev
 ```
 
 ## ساختار پروژه
@@ -60,7 +92,7 @@ uvicorn app.main:app --port 8000
 │   │   ├── schemas/         # مدل‌های Pydantic
 │   │   ├── services/        # منطق کسب‌وکار (AI Gateway, RAG, ...)
 │   │   └── tests/           # تست‌های واحد
-│   ├── init-scripts/        # اسکریپت‌های اولیه Postgres (pgvector)
+│   ├── init-scripts/        # اسکریپت‌های اولیه دیتابیس
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
@@ -76,8 +108,10 @@ uvicorn app.main:app --port 8000
 - ✅ احراز هویت محلی + Active Directory/LDAP با provision خودکار کاربران
 - ✅ کنترل دسترسی نقش‌محور (RBAC) با نقش‌های سیستمی پیش‌فرض
 - ✅ AI Gateway چند-سرویس‌دهنده: OpenAI، Gemini، Anthropic، Ollama
-- ✅ پایگاه دانش سازمانی با جستجوی معنایی (RAG + pgvector)
+- ✅ پایگاه دانش سازمانی با جستجوی معنایی (RAG + embeddings)
 - ✅ چت سازمانی با تاریخچه، ارجاع به منابع و سیاست‌های پاسخ‌دهی
 - ✅ سهمیه‌بندی روزانه/ماهانه سؤال و توکن به تفکیک کاربر و گروه
 - ✅ لاگ ممیزی کامل (Audit Log) رخدادهای امنیتی
 - ✅ رمزنگاری Fernet برای کلیدهای API و اعتبارنامه‌های AD
+- ✅ پنل ادمین کامل ۲۰ صفحه‌ای: داشبورد، کاربران، گروه‌ها، نقش‌ها، تنظیمات AD، هوش مصنوعی، پایگاه دانش، اشتراک‌ها، مکالمات، لاگ‌ها، گزارش‌ها و پشتیبان‌گیری
+- ✅ خروجی CSV سازگار با اکسل فارسی (BOM) و پشتیبان‌گیری JSON از کل دیتابیس

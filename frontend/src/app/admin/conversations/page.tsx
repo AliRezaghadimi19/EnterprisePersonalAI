@@ -47,8 +47,9 @@ export default function ConversationsPage() {
       key: 'title',
       header: 'مکالمه',
       render: (c) => (
-        <div className="max-w-xs">
+        <div className="max-w-xs flex items-center gap-2">
           <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{c.title || 'بدون عنوان'}</p>
+          {c.deleted_by_user && <Badge tone="warn">حذف‌شده توسط کاربر</Badge>}
           {c.last_message_preview && <p className="mt-0.5 truncate text-xs text-slate-400">{c.last_message_preview}</p>}
         </div>
       ),

@@ -25,6 +25,7 @@ from app.services.knowledge_service import knowledge_service
 from app.services.ai_gateway.gateway import ai_gateway
 from app.services.ai_model_service import ai_model_service
 from app.services.user_service import user_service
+from app.services.audit_service import audit_service
 
 class ChatService:
     # --------------------------------------------------------------------------
@@ -39,7 +40,7 @@ class ChatService:
                    (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_preview
             FROM conversations c
             LEFT JOIN messages m ON m.conversation_id = c.id
-            WHERE c.user_id = ?
+            WHERE c.user_id = ? AND c.deleted_at IS NULL
             GROUP BY c.id
             ORDER BY c.is_pinned DESC, c.updated_at DESC
         """, (user_id,))
@@ -89,7 +90,7 @@ class ChatService:
     def get_conversation_detail(conversation_id: str, user_id: str) -> Dict[str, Any]:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM conversations WHERE id = ? AND user_id = ?", (conversation_id, user_id))
+        cursor.execute("SELECT * FROM conversations WHERE id = ? AND user_id = ? AND deleted_at IS NULL", (conversation_id, user_id))
         conv = cursor.fetchone()
         if not conv:
             conn.close()
@@ -145,9 +146,37 @@ class ChatService:
 
     @staticmethod
     def delete_conversation(conversation_id: str, user_id: str) -> bool:
+        """User-side soft delete — the conversation is hidden from the user
+        but remains fully visible to admins (audit / compliance)."""
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM conversations WHERE id = ? AND user_id = ?", (conversation_id, user_id))
+        if not cursor.fetchone():
+            conn.close()
+            raise ResourceNotFoundError(detail_fa="گفتگو یافت نشد.")
+
+        now = datetime.now(timezone.utc).isoformat()
+        cursor.execute("UPDATE conversations SET deleted_at = ?, updated_at = ? WHERE id = ?", (now, now, conversation_id))
+        conn.commit()
+        conn.close()
+        return True
+
+    @staticmethod
+    def get_conversation_owner(conversation_id: str) -> Optional[str]:
+        """Return the user_id owning a conversation, or None if it does not exist."""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM conversations WHERE id = ?", (conversation_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return row["user_id"] if row else None
+
+    @staticmethod
+    def admin_delete_conversation(conversation_id: str, actor_user: Dict[str, Any]) -> bool:
+        """Admin-side permanent delete of any conversation (hard delete + audit)."""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM conversations WHERE id = ?", (conversation_id,))
         if not cursor.fetchone():
             conn.close()
             raise ResourceNotFoundError(detail_fa="گفتگو یافت نشد.")
@@ -156,6 +185,13 @@ class ChatService:
         cursor.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
         conn.commit()
         conn.close()
+        audit_service.log_action(
+            actor_user_id=actor_user["id"],
+            actor_username=actor_user["username"],
+            action_type="CONVERSATION_DELETED",
+            target_resource="CONVERSATIONS",
+            target_id=conversation_id,
+        )
         return True
 
     # --------------------------------------------------------------------------
@@ -426,7 +462,7 @@ class ChatService:
                    c.model_id, c.is_pinned,
                    (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS messages_count,
                    (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_preview,
-                   c.created_at, c.updated_at
+                   c.created_at, c.updated_at, c.deleted_at
             FROM conversations c
             LEFT JOIN users u ON u.id = c.user_id{where_sql}
             ORDER BY c.updated_at DESC
@@ -450,6 +486,7 @@ class ChatService:
                 "last_message_preview": r[8],
                 "created_at": r[9],
                 "updated_at": r[10],
+                "deleted_by_user": bool(r[11]),
             }
             for r in rows
         ]
