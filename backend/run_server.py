@@ -701,15 +701,24 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
             from datetime import datetime, timezone
             now = datetime.now(timezone.utc).isoformat()
             enc_pwd = encrypt_sensitive_data(body["bind_password"]) if body.get("bind_password") else None
+            allowed_groups = json.dumps(body.get("allowed_groups", []), ensure_ascii=False)
+            group_role_mapping = json.dumps(body.get("group_role_mapping", {}), ensure_ascii=False)
             cursor.execute("""
                 UPDATE active_directory_configs SET
-                    is_enabled = ?, server_host = ?, port = ?, domain_name = ?,
-                    base_dn = ?, auto_provision = ?, updated_at = ?
+                    is_enabled = ?, server_host = ?, port = ?, port_ssl = ?,
+                    use_ssl = ?, domain_name = ?, base_dn = ?,
+                    user_search_base = ?, group_search_base = ?,
+                    allowed_groups = ?, group_role_mapping = ?,
+                    auto_provision = ?, updated_at = ?
                 WHERE id = (SELECT id FROM active_directory_configs LIMIT 1)
             """, (
                 int(body.get("is_enabled", False)), body.get("server_host", ""),
-                int(body.get("port", 389)), body.get("domain_name", ""),
-                body.get("base_dn", ""), int(body.get("auto_provision", True)), now
+                int(body.get("port", 389)), int(body.get("port_ssl", 636)),
+                int(bool(body.get("use_ssl", False))), body.get("domain_name", ""),
+                body.get("base_dn", ""), body.get("user_search_base", ""),
+                body.get("group_search_base", ""),
+                allowed_groups, group_role_mapping,
+                int(body.get("auto_provision", True)), now
             ))
             if enc_pwd:
                 cursor.execute("UPDATE active_directory_configs SET encrypted_bind_password = ?", (enc_pwd,))
