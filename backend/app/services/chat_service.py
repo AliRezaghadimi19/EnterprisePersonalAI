@@ -252,7 +252,7 @@ class ChatService:
                     "document_title": r.document_title,
                     "category_name": r.category_name,
                     "chunk_index": r.chunk_index,
-                    "content_snippet": r.content[:150] + ("..." if len(r.content) > 150 else ""),
+                    "content_snippet": r.content[:1200] + ("..." if len(r.content) > 1200 else ""),
                     "similarity_score": r.similarity_score
                 })
 

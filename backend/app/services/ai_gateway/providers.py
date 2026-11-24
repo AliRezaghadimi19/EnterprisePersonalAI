@@ -11,6 +11,28 @@ from urllib.error import URLError, HTTPError
 
 from app.services.ai_gateway.base import BaseLLMProvider
 
+def _urlopen_with_retry(req: Request, timeout: int = 120, attempts: int = 3):
+    """Open a URL with short-retry on transient HTTP 5xx errors (Google/Gemini 503 bursts)."""
+    last_exc: Exception = RuntimeError("unreachable")
+    for i in range(attempts):
+        try:
+            return urlopen(req, timeout=timeout)
+        except HTTPError as e:
+            # HTTPError body must be consumed; 503/429 are transient
+            if e.code in (502, 503, 504, 429):
+                last_exc = e
+                if i < attempts - 1:
+                    time.sleep(2 * (i + 1))
+                    continue
+            raise
+        except URLError as e:
+            last_exc = e
+            if i < attempts - 1:
+                time.sleep(2 * (i + 1))
+                continue
+            raise
+    raise last_exc
+
 def estimate_tokens(text: str) -> int:
     """Rough token estimation (approx 4 chars per token for English, 2 chars for Persian)."""
     if not text:
@@ -65,7 +87,7 @@ class OpenAIProvider(BaseLLMProvider):
                 f"{self.base_url}/models",
                 headers={"Authorization": f"Bearer {self.api_key}"}
             )
-            with urlopen(req, timeout=5) as resp:
+            with _urlopen_with_retry(req, timeout=5) as resp:
                 latency = (time.time() - start) * 1000
                 if resp.status == 200:
                     return True, round(latency, 2), "ارتباط با API رسمی OpenAI برقرار شد."
@@ -100,7 +122,7 @@ class OpenAIProvider(BaseLLMProvider):
             }
         )
         try:
-            with urlopen(req, timeout=30) as resp:
+            with _urlopen_with_retry(req, timeout=120) as resp:
                 latency = (time.time() - start) * 1000
                 res_data = json.loads(resp.read().decode('utf-8'))
                 choice = res_data["choices"][0]
@@ -165,7 +187,7 @@ class AnthropicProvider(BaseLLMProvider):
             "content-type": "application/json"
         })
         try:
-            with urlopen(req, timeout=30) as resp:
+            with _urlopen_with_retry(req, timeout=120) as resp:
                 latency = (time.time() - start) * 1000
                 res_data = json.loads(resp.read().decode('utf-8'))
                 text = res_data["content"][0]["text"]
@@ -193,7 +215,7 @@ class GeminiProvider(BaseLLMProvider):
         url = f"{self.base_url}/models?key={self.api_key}"
         try:
             req = Request(url)
-            with urlopen(req, timeout=10) as resp:
+            with _urlopen_with_retry(req, timeout=10) as resp:
                 lat = (time.time() - start) * 1000
                 return True, round(lat, 2), "ارتباط زنده با سرویس Google Gemini با موفقیت برقرار شد."
         except Exception as e:
@@ -237,7 +259,7 @@ class GeminiProvider(BaseLLMProvider):
         payload = json.dumps(body_dict).encode('utf-8')
         req = Request(url, data=payload, headers={"Content-Type": "application/json"})
         try:
-            with urlopen(req, timeout=30) as resp:
+            with _urlopen_with_retry(req, timeout=120) as resp:
                 latency = (time.time() - start) * 1000
                 res_data = json.loads(resp.read().decode('utf-8'))
                 candidate = res_data.get("candidates", [{}])[0]
