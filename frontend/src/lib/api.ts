@@ -52,12 +52,13 @@ interface ApiFetchOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   body?: unknown;
   raw?: boolean; // return the Response itself (for blob downloads)
+  formBody?: FormData; // multipart upload — bypasses JSON serialization
   retryOn401?: boolean;
 }
 
 export async function apiFetch(path: string, opts: ApiFetchOptions = {}): Promise<Response> {
   const token = getAccessToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = opts.formBody ? {} : { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let res: Response;
@@ -65,7 +66,7 @@ export async function apiFetch(path: string, opts: ApiFetchOptions = {}): Promis
     res = await fetch(`${API_BASE}${path}`, {
       method: opts.method || 'GET',
       headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: opts.formBody ? opts.formBody : opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
   } catch {
     throw new ApiError('ارتباط با سرور برقرار نشد.', 0);
@@ -85,6 +86,10 @@ export async function apiFetch(path: string, opts: ApiFetchOptions = {}): Promis
 }
 
 async function parseJsonResponse(res: Response): Promise<unknown> {
+  return parseJsonResponsePublic(res);
+}
+
+export async function parseJsonResponsePublic(res: Response): Promise<unknown> {
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
     // run_server.py answers unknown routes with the embedded HTML SPA & status 200
@@ -242,6 +247,13 @@ export const api = {
     usageReport: (params?: Record<string, string | number | undefined>) => {
       const qs = buildQuery(params);
       return apiGet<import('@/types/admin').UsageReport>(`/admin/usage-report${qs}`);
+    },
+    upload: (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      return apiFetch('/admin/upload', { method: 'POST', formBody: form }).then((res) =>
+        parseJsonResponsePublic(res) as Promise<import('@/types/entities').KnowledgeDocument>
+      );
     },
   },
 };

@@ -32,7 +32,7 @@ def tokenize_persian_text(text: str) -> List[str]:
     if not text:
         return []
     normalized = text.replace('ي', 'ی').replace('ك', 'ک').replace('آ', 'ا').lower()
-    words = re.findall(r'[\w\u0600-\u06FF]+', normalized)
+    words = re.findall(r'[\w\u0621-\u064A\u0660-\u0669\u066E-\u06D3]+', normalized)  # \u0628\u0633\u062A\u0646 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0646\u0642\u0637\u0647\u200C\u06AF\u0630\u0627\u0631\u06CC (\u060C \u061B \u061F) \u0627\u0632 \u062A\u0648\u06A9\u0646
     return [w for w in words if len(w) > 1 and w not in PERSIAN_STOP_WORDS]
 
 def _deterministic_hash(token: str, mod: int) -> int:

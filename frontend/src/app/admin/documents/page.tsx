@@ -3,8 +3,8 @@
  */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FileText, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { PageHeader } from '@/components/admin/shell';
 import { DataTable } from '@/components/admin/DataTable';
 import type { Column } from '@/components/admin/DataTable';
@@ -35,6 +35,8 @@ export default function DocumentsPage() {
   const [categories, setCategories] = useState<KnowledgeCategory[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, loading, reload } = useApiList<KnowledgeDocument>(
     () => api.knowledge.documents.list({ category_id: categoryFilter || undefined }),
@@ -72,6 +74,22 @@ export default function DocumentsPage() {
     setEditingId(null);
     form.reset();
     setModalOpen(true);
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      await api.admin.upload(file);
+      toast.success(`فایل «${file.name}» به‌عنوان سند جدید ایندکس شد.`);
+      await reload();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'آپلود فایل ناموفق بود.');
+    } finally {
+      setUploading(false);
+    }
   }
 
   function openEdit(doc: KnowledgeDocument) {
@@ -145,7 +163,26 @@ export default function DocumentsPage() {
       <PageHeader
         title="مدیریت مستندات"
         description="سؤال‌وجواب‌ها و اسناد اختصاصی — به‌صورت خودکار برای جستجوی معنایی ایندکس می‌شوند"
-        actions={<Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>سند جدید</Button>}
+        actions={
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.md,.csv,.json,.html,.htm"
+              className="hidden"
+              onChange={handleUpload}
+            />
+            <Button
+              variant="outline"
+              icon={<Upload className="h-4 w-4" />}
+              loading={uploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              آپلود فایل
+            </Button>
+            <Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>سند جدید</Button>
+          </>
+        }
       />
 
       <div className="mb-4">

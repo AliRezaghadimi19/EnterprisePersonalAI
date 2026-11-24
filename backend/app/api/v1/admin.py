@@ -3,7 +3,7 @@ Admin API — statistics, audit logs, conversations, usage reports, export, back
 Parity endpoints for run_server.py (standalone) — same JSON shapes.
 """
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Response, UploadFile, File
 
 from app.api.deps import require_admin, require_super_admin
 from app.services import admin_service
@@ -92,4 +92,29 @@ def backup(current_user: dict = Depends(require_super_admin)):
         content=__import__("json").dumps(data, ensure_ascii=False, default=str).encode("utf-8"),
         media_type="application/json; charset=utf-8",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.post("/upload", summary="آپلود فایل متنی به‌عنوان سند پایگاه دانش")
+async def upload_document(file: UploadFile = File(...), current_user: dict = Depends(require_admin)):
+    import os
+    from app.core.exceptions import PersianAppException
+    from app.schemas.knowledge import KnowledgeDocumentCreate
+    from app.services import knowledge_service as knowledge_service_mod
+
+    filename = file.filename or "upload.txt"
+    ext = os.path.splitext(filename)[1].lower().lstrip(".")
+    if ext not in ("txt", "md", "csv", "json", "html", "htm"):
+        raise PersianAppException(status_code=400, detail="در حالت لوکال فقط فایل‌های متنی (txt، md، csv، json، html) پشتیبانی می‌شوند.")
+    data = await file.read()
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            text = data.decode("cp1256")
+        except Exception:
+            raise PersianAppException(status_code=400, detail="فایل به‌صورت متن قابل خواندن نیست (فقط UTF-8 پشتیبانی می‌شود).")
+    return knowledge_service_mod.knowledge_service.create_document(
+        KnowledgeDocumentCreate(title=os.path.splitext(filename)[0], document_type="TXT", content_text=text),
+        actor_user=current_user,
     )

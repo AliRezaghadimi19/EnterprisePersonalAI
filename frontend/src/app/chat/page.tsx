@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
  * صفحه چت سازمانی — گفتگو با مدل‌های هوش مصنوعی از طریق بک‌اند
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
 interface Message {
   id: string;
@@ -31,6 +31,8 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [user, setUser] = useState<{ first_name?: string; last_name?: string; username?: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   function authHeaders(): HeadersInit {
@@ -45,6 +47,7 @@ export default function ChatPage() {
       router.replace('/');
       return;
     }
+    setReady(true);
     (async () => {
       try {
         const me = await fetch(`${API_URL}/auth/me`, { headers: authHeaders() });
@@ -57,6 +60,8 @@ export default function ChatPage() {
         if (convs.ok) setConversations(await convs.json());
       } catch {
         /* سرور در دسترس نیست — UI همچنان قابل استفاده می‌ماند */
+      } finally {
+        setLoading(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,7 +195,7 @@ export default function ChatPage() {
               {c.title}
             </button>
           ))}
-          {conversations.length === 0 && (
+          {conversations.length === 0 && !loading && (
             <p className="text-xs text-slate-500 px-3 py-2">هنوز گفتگویی ندارید.</p>
           )}
         </div>
@@ -210,7 +215,13 @@ export default function ChatPage() {
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
-          {messages.length === 0 && (
+          {loading && (
+            <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-500">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-blue-500" />
+              <p className="text-sm">در حال بارگذاری گفتگو…</p>
+            </div>
+          )}
+          {!loading && messages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-center text-slate-500">
               <p className="text-4xl mb-3">💬</p>
               <p>اولین پیام خود را بنویسید تا گفتگو آغاز شود.</p>
@@ -232,7 +243,7 @@ export default function ChatPage() {
           {sending && (
             <div className="flex justify-end">
               <div className="bg-slate-800 rounded-2xl rounded-bl-md px-4 py-3 text-slate-400">
-                در حال نوشتن...
+                در حال نوشتن<span className="animate-pulse">…</span>
               </div>
             </div>
           )}
@@ -248,7 +259,7 @@ export default function ChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="پیام خود را بنویسید..."
-              disabled={sending}
+              disabled={sending || !ready}
               className="flex-1 rounded-xl bg-slate-800/80 border border-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-500 disabled:opacity-60 transition"
             />
             <button

@@ -8,6 +8,7 @@ Zero external pip dependencies required for immediate execution.
 import os
 import sys
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -70,6 +71,7 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         for key, value in (extra_headers or {}).items():
             self.send_header(key, value)
+        self.send_header('Access-Control-Expose-Headers', 'Content-Disposition')
         self.end_headers()
         self.wfile.write(body)
 
@@ -104,6 +106,42 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
             return {}
         raw = self.rfile.read(content_len).decode('utf-8')
         return json.loads(raw)
+
+    def _read_multipart_file(self) -> Dict[str, Any]:
+        """Parse a single-file multipart/form-data body. Returns {filename, content_type, data} or raises ValueError."""
+        content_type_header = self.headers.get('Content-Type', '')
+        if not content_type_header.startswith('multipart/form-data'):
+            raise ValueError('فرمت درخواست باید multipart/form-data باشد.')
+        m = re.search(r'boundary=("?)([^";]+)\1', content_type_header)
+        if not m:
+            raise ValueError('مرز (boundary) در درخواست یافت نشد.')
+        boundary = m.group(2).encode('utf-8')
+        content_len = int(self.headers.get('Content-Length', 0))
+        if content_len == 0:
+            raise ValueError('فایلی ارسال نشده است.')
+        raw = self.rfile.read(content_len)
+        delim = b'--' + boundary
+        parts = raw.split(delim)
+        for part in parts:
+            part = part.strip(b'\r\n')
+            if not part or part == b'--':
+                continue
+            if b'\r\n\r\n' not in part:
+                continue
+            head, _, data = part.partition(b'\r\n\r\n')
+            if data.endswith(b'\r\n'):
+                data = data[:-2]
+            head_text = head.decode('utf-8', errors='replace').lower()
+            if 'filename=' not in head_text:
+                continue  # فیلد معمولی فرم — نادیده گرفته می‌شود
+            fm = re.search(r'filename="([^"]*)"', head_text)
+            cm = re.search(r'content-type:\s*([^\r\n]+)', head_text)
+            return {
+                'filename': fm.group(1) if fm else 'upload.bin',
+                'content_type': (cm.group(1).strip() if cm else 'application/octet-stream'),
+                'data': data,
+            }
+        raise ValueError('فایلی در درخواست یافت نشد.')
 
     def do_GET(self):
         url = urlparse(self.path)
@@ -383,7 +421,8 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         url = urlparse(self.path)
         path = url.path
-        body = self._read_json_body()
+        content_type_header = self.headers.get('Content-Type', '')
+        body = {} if content_type_header.startswith('multipart/form-data') else self._read_json_body()
 
         # Login
         if path == '/api/v1/auth/login':
@@ -505,6 +544,56 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
                 return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
             try:
                 created = ai_model_service.create_model(AIModelCreate(**body), actor_user=user)
+                return self._send_json(201, created)
+            except PersianAppException as e:
+                return self._send_json(e.status_code, e.detail)
+
+        # Admin Document File Upload (Phase 9) — multipart → text extraction → knowledge document
+        if path == '/api/v1/admin/upload':
+            user = self._get_bearer_user()
+            if not user or user.get("role_name") not in ("super_admin", "system_admin"):
+                return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
+            try:
+                f = self._read_multipart_file()
+            except ValueError as ve:
+                return self._send_json(400, {"success": False, "message": str(ve)})
+            except Exception as e:
+                return self._send_json(500, {"success": False, "message": f"خطای دریافت فایل: {str(e)}"})
+
+            filename = f['filename']
+            ext = os.path.splitext(filename)[1].lower().lstrip('.')
+            if ext not in ('txt', 'md', 'csv', 'json', 'html', 'htm'):
+                return self._send_json(400, {"success": False, "message": "در حالت لوکال فقط فایل‌های متنی (txt، md، csv، json، html) پشتیبانی می‌شوند. PDF/DOCX نیاز به سرور اصلی دارند."})
+            try:
+                text = f['data'].decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    text = f['data'].decode('cp1256')  # try Persian codepage
+                except Exception:
+                    return self._send_json(400, {"success": False, "message": "فایل به‌صورت متن قابل خواندن نیست (فقط UTF-8 پشتیبانی می‌شود)."})
+
+            title = os.path.splitext(filename)[0]
+            try:
+                # دسته «فایل‌های آپلودی» را در صورت نبود، خودکار بساز
+                cat = None
+                for c in knowledge_service.list_categories():
+                    if c['name'] == 'فایل‌های آپلودی':
+                        cat = c
+                        break
+                if not cat:
+                    cat = knowledge_service.create_category(
+                        KnowledgeCategoryCreate(name='فایل‌های آپلودی', description='اسناد ایجادشده از آپلود فایل'),
+                        actor_user=user,
+                    )
+                created = knowledge_service.create_document(
+                    KnowledgeDocumentCreate(
+                        category_id=cat['id'],
+                        title=title,
+                        document_type='TXT',
+                        content_text=text,
+                    ),
+                    actor_user=user,
+                )
                 return self._send_json(201, created)
             except PersianAppException as e:
                 return self._send_json(e.status_code, e.detail)
