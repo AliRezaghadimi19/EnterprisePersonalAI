@@ -12,7 +12,7 @@ import { Button, Badge, Input, Select, Textarea } from '@/components/ui';
 import { ConfirmDialog, Modal, useToast } from '@/components/ui/overlays';
 import { api, ApiError } from '@/lib/api';
 import { useApiList, useDebounce, useFormState } from '@/lib/hooks';
-import { fmtDate } from '@/lib/format';
+import { fmtDate, fmtNum } from '@/lib/format';
 import { STATUS_BADGES } from '@/lib/constants';
 import type { KnowledgeCategory, KnowledgeDocument } from '@/types/entities';
 
@@ -53,7 +53,7 @@ export default function DocumentsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.knowledge.search({ query: debouncedSearch, top_k: 5 });
+        const res = await api.knowledge.search({ query: debouncedSearch, top_k: 5 }) as { results?: Array<{ document_id: string; title: string; content: string; score: number }> };
         if (!cancelled) setSemanticResults(res.results || []);
       } catch {
         if (!cancelled) setSemanticResults([]);
@@ -240,7 +240,6 @@ export default function DocumentsPage() {
             value={String(form.values.content_text)}
             onChange={(e) => form.setField('content_text', e.target.value)}
             error={form.errors.content_text}
-            hint="پس از ذخیره، متن به‌صورت خودکار به چانک‌های برداری تبدیل و ایندکس می‌شود."
           />
         </div>
       </Modal>

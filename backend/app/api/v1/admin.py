@@ -72,7 +72,7 @@ def export_csv(entity: str = "users", current_user: dict = Depends(require_admin
     writer = csv.writer(buf)
     writer.writerow(headers)
     writer.writerows(rows)
-    content = "﻿" + buf.getvalue()  # UTF-8 BOM for Excel
+    content = '\ufeff' + buf.getvalue()  # UTF-8 BOM for Excel
 
     from datetime import datetime
     filename = f"{entity}-{datetime.utcnow().strftime('%Y%m%d')}.csv"

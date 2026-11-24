@@ -30,17 +30,17 @@ export default function FileSettingsPage() {
   const { data: groups, reload: reloadGroups } = useApiList<AdminGroup>(() => api.groups.list(), [], ['groups']);
 
   useEffect(() => {
-    api.settings.get().then(setSettings).catch(() => undefined);
+    api.settings.get().then((s) => setSettings(s as SystemSettings)).catch(() => undefined);
   }, []);
 
   async function saveGlobal() {
     if (!settings) return;
     setSavingGlobal(true);
     try {
-      const updated = await api.settings.update({
+      const updated = (await api.settings.update({
         allow_file_upload_globally: settings.allow_file_upload_globally,
         max_file_size_mb: settings.max_file_size_mb,
-      });
+      })) as SystemSettings;
       setSettings(updated);
       toast.success('تنظیمات سراسری فایل ذخیره شد.');
     } catch (e) {

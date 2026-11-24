@@ -42,7 +42,7 @@ export default function PoliciesPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.settings.get().then(setSettings).catch((e) => toast.error(e instanceof ApiError ? e.message : 'دریافت تنظیمات ناموفق بود.'));
+    api.settings.get().then((s) => setSettings(s as SystemSettings)).catch((e: unknown) => toast.error(e instanceof ApiError ? e.message : 'دریافت تنظیمات ناموفق بود.'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -50,7 +50,7 @@ export default function PoliciesPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      const updated = await api.settings.update({ default_response_policy: policy as SystemSettings['default_response_policy'] });
+      const updated = (await api.settings.update({ default_response_policy: policy as SystemSettings['default_response_policy'] })) as SystemSettings;
       setSettings(updated);
       toast.success('سیاست پیش‌فرض سامانه بروزرسانی شد.');
     } catch (e) {

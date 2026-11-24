@@ -20,7 +20,7 @@ export default function SystemSettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.settings.get().then(setSettings).catch((e) => toast.error(e instanceof ApiError ? e.message : 'دریافت تنظیمات ناموفق بود.'));
+    api.settings.get().then((s) => setSettings(s as SystemSettings)).catch((e: unknown) => toast.error(e instanceof ApiError ? e.message : 'دریافت تنظیمات ناموفق بود.'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -31,7 +31,7 @@ export default function SystemSettingsPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      const updated = await api.settings.update(settings);
+      const updated = (await api.settings.update(settings)) as SystemSettings;
       setSettings(updated);
       toast.success('تنظیمات سامانه ذخیره شد.');
     } catch (e) {

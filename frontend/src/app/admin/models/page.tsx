@@ -131,7 +131,7 @@ export default function ModelsPage() {
       header: 'مدل',
       render: (m) => (
         <div className="flex items-center gap-2">
-          {Boolean(m.is_default) && <Star className="h-4 w-4 fill-amber-400 text-amber-400" title="مدل پیش‌فرض" />}
+          {Boolean(m.is_default) && <span title="مدل پیش‌فرض"><Star className="h-4 w-4 fill-amber-400 text-amber-400" /></span>}
           <div>
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{m.display_name_fa}</p>
             <p className="text-xs text-slate-400" dir="ltr">{m.model_identifier}</p>

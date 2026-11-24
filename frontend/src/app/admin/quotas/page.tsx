@@ -105,7 +105,7 @@ export default function QuotasPage() {
       ),
     },
     { key: 'group', header: 'گروه', render: (u) => <Badge tone="neutral">{u.group_name || '—'}</Badge> },
-    { key: 'daily', header: 'سهمیه روزانه', render: (u) => <QuotaBar used={usageByUser[u.id]?.questions ?? 0} limit={u.effective_daily_limit ?? u.custom_daily_limit ?? undefined} /> },
+    { key: 'daily', header: 'سهمیه روزانه', render: (u) => <QuotaBar used={usageByUser[u.id]?.questions ?? 0} limit={u.custom_daily_limit ?? undefined} /> },
     {
       key: 'override',
       header: 'سقف اختصاصی',

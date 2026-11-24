@@ -361,7 +361,7 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
             writer = _csv.writer(buf)
             writer.writerow(headers)
             writer.writerows(rows)
-            content = "﻿" + buf.getvalue()  # UTF-8 BOM for Excel Persian
+            content = '\ufeff' + buf.getvalue()  # UTF-8 BOM for Excel Persian
             filename = f"{entity}-{datetime.utcnow().strftime('%Y%m%d')}.csv"
             return self._send_raw(200, content.encode("utf-8"),
                                   "text/csv; charset=utf-8",
