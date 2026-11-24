@@ -30,7 +30,9 @@ export function useApiList<T>(
     setError(null);
     try {
       const raw = await fetcherRef.current();
-      setData(normalizeList<T>(raw, wrapperRef.current));
+      // api.* helpers already normalize to {items,total}; 'items' key makes
+      // normalizeList a no-op for pre-normalized results (avoids double unwrap).
+      setData(normalizeList<T>(raw, ['items', ...(wrapperRef.current || [])]));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'خطای ناشناخته');
       setData({ items: [], total: 0 });

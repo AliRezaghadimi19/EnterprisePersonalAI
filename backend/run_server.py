@@ -178,7 +178,15 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
             user = self._get_bearer_user()
             if not user or user.get("role_name") not in ("super_admin", "system_admin"):
                 return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
-            users_list = user_service.list_users()
+            q = parse_qs(url.query)
+            active_raw = q.get("is_active", [None])[0]
+            users_list = user_service.list_users(
+                search=q.get("search", [None])[0],
+                group_id=q.get("group_id", [None])[0],
+                role_id=q.get("role_id", [None])[0],
+                is_active=(active_raw.lower() in ("1", "true")) if active_raw is not None else None,
+                auth_type=q.get("auth_type", [None])[0],
+            )
             return self._send_json(200, {"users": users_list, "total": len(users_list)})
 
         if path.startswith('/api/v1/users/'):
