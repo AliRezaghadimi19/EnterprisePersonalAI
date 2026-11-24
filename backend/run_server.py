@@ -9,6 +9,7 @@ import os
 import sys
 import json
 import uuid
+from datetime import datetime
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -35,6 +36,7 @@ from app.schemas.user_management import UserCreate, UserUpdate, GroupCreate, Gro
 from app.services.ai_model_service import ai_model_service
 from app.services.knowledge_service import knowledge_service
 from app.services.chat_service import chat_service
+from app.services import admin_service
 from app.schemas.ai_management import AIProviderCreate, AIProviderUpdate, AIModelCreate, AIModelUpdate
 from app.schemas.knowledge import KnowledgeCategoryCreate, KnowledgeDocumentCreate, KnowledgeDocumentUpdate, SemanticSearchRequest
 from app.schemas.chat import ConversationCreate, SendMessageRequest
@@ -57,6 +59,17 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_raw(self, status_code: int, body: bytes, content_type: str, extra_headers: Optional[Dict[str, str]] = None):
+        """Send raw bytes (CSV / backup downloads)."""
+        self.send_response(status_code)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Access-Control-Allow-Origin', '*')
+        for key, value in (extra_headers or {}).items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -255,6 +268,106 @@ class EnterpriseAIHandler(BaseHTTPRequestHandler):
                 return self._send_json(200, detail)
             except PersianAppException as e:
                 return self._send_json(e.status_code, e.detail)
+
+        # 10b. Admin Panel APIs (Phase 2+)
+        if path == '/api/v1/admin/stats':
+            user = self._get_bearer_user()
+            if not user or user.get("role_name") not in ("super_admin", "system_admin"):
+                return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
+            q = parse_qs(url.query)
+            days = int(q.get("days", ["30"])[0])
+            try:
+                return self._send_json(200, admin_service.get_dashboard_stats(days=days))
+            except Exception as e:
+                return self._send_json(500, {"success": False, "message": f"خطای آمار: {str(e)}"})
+
+        if path == '/api/v1/admin/audit-logs':
+            user = self._get_bearer_user()
+            if not user or user.get("role_name") not in ("super_admin", "system_admin"):
+                return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
+            q = parse_qs(url.query)
+            try:
+                return self._send_json(200, audit_service.list_logs(
+                    search=q.get("search", [""])[0],
+                    action_type=q.get("action_type", [""])[0],
+                    page=int(q.get("page", ["1"])[0]),
+                    page_size=int(q.get("page_size", ["25"])[0]),
+                ))
+            except Exception as e:
+                return self._send_json(500, {"success": False, "message": f"خطای لاگ‌ها: {str(e)}"})
+
+        if path == '/api/v1/admin/conversations':
+            user = self._get_bearer_user()
+            if not user or user.get("role_name") not in ("super_admin", "system_admin"):
+                return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
+            q = parse_qs(url.query)
+            try:
+                return self._send_json(200, chat_service.list_all_conversations(
+                    search=q.get("search", [""])[0],
+                    user_id=q.get("user_id", [""])[0],
+                    page=int(q.get("page", ["1"])[0]),
+                    page_size=int(q.get("page_size", ["25"])[0]),
+                ))
+            except Exception as e:
+                return self._send_json(500, {"success": False, "message": f"خطای مکالمات: {str(e)}"})
+
+        if path.startswith('/api/v1/admin/conversations/'):
+            user = self._get_bearer_user()
+            if not user or user.get("role_name") not in ("super_admin", "system_admin"):
+                return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
+            conv_id = path.rsplit('/', 1)[-1]
+            try:
+                return self._send_json(200, chat_service.admin_get_conversation_detail(conv_id))
+            except PersianAppException as e:
+                return self._send_json(e.status_code, e.detail)
+            except Exception as e:
+                return self._send_json(500, {"success": False, "message": f"خطا: {str(e)}"})
+
+        if path == '/api/v1/admin/usage-report':
+            user = self._get_bearer_user()
+            if not user or user.get("role_name") not in ("super_admin", "system_admin"):
+                return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
+            q = parse_qs(url.query)
+            try:
+                return self._send_json(200, admin_service.get_usage_report(
+                    from_date=q.get("from_date", [None])[0],
+                    to_date=q.get("to_date", [None])[0],
+                    group_by=q.get("group_by", ["day"])[0],
+                ))
+            except Exception as e:
+                return self._send_json(500, {"success": False, "message": f"خطای گزارش: {str(e)}"})
+
+        if path == '/api/v1/admin/export':
+            user = self._get_bearer_user()
+            if not user or user.get("role_name") not in ("super_admin", "system_admin"):
+                return self._send_json(403, {"success": False, "message": "دسترسی غیرمجاز."})
+            q = parse_qs(url.query)
+            entity = q.get("entity", ["users"])[0]
+            try:
+                headers, rows = admin_service.build_csv(entity)
+            except PersianAppException as e:
+                return self._send_json(e.status_code, e.detail)
+            import csv as _csv
+            import io as _io
+            buf = _io.StringIO()
+            writer = _csv.writer(buf)
+            writer.writerow(headers)
+            writer.writerows(rows)
+            content = "﻿" + buf.getvalue()  # UTF-8 BOM for Excel Persian
+            filename = f"{entity}-{datetime.utcnow().strftime('%Y%m%d')}.csv"
+            return self._send_raw(200, content.encode("utf-8"),
+                                  "text/csv; charset=utf-8",
+                                  {"Content-Disposition": f"attachment; filename={filename}"})
+
+        if path == '/api/v1/admin/backup':
+            user = self._get_bearer_user()
+            if not user or user.get("role_name") != "super_admin":
+                return self._send_json(403, {"success": False, "message": "این عملیات منحصر به مدیر کل است."})
+            data = admin_service.export_backup()
+            filename = f"enterprise-ai-backup-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.json"
+            return self._send_raw(200, json.dumps(data, ensure_ascii=False, default=str).encode("utf-8"),
+                                  "application/json; charset=utf-8",
+                                  {"Content-Disposition": f"attachment; filename={filename}"})
 
         # 11. Web Application UI (Single Page Enterprise Portal)
         return self._send_html(ENTERPRISE_WEB_APP_HTML)

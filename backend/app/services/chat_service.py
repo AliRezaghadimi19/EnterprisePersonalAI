@@ -387,4 +387,128 @@ class ChatService:
             monthly_quota_remaining=max(0, hierarchy["monthly_quota_remaining"] - 1)
         )
 
+    # ------------------------------------------------------------------
+    # Admin views (no ownership restriction)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def list_all_conversations(search: str = "", user_id: str = "", page: int = 1, page_size: int = 25) -> Dict[str, Any]:
+        """List every user's conversations for the admin panel."""
+        page = max(1, int(page))
+        page_size = min(100, max(1, int(page_size)))
+        offset = (page - 1) * page_size
+
+        conditions = []
+        params: list = []
+        if search:
+            conditions.append("(c.title LIKE ? OR u.username LIKE ?)")
+            like = f"%{search}%"
+            params.extend([like, like])
+        if user_id:
+            conditions.append("c.user_id = ?")
+            params.append(user_id)
+        where_sql = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT COUNT(DISTINCT c.id) FROM conversations c
+            LEFT JOIN users u ON u.id = c.user_id{where_sql}
+            """,
+            tuple(params),
+        )
+        total = int(cursor.fetchone()[0])
+
+        cursor.execute(
+            f"""
+            SELECT c.id, c.title, c.user_id, u.username,
+                   u.first_name || ' ' || u.last_name AS full_name,
+                   c.model_id, c.is_pinned,
+                   (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS messages_count,
+                   (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_preview,
+                   c.created_at, c.updated_at
+            FROM conversations c
+            LEFT JOIN users u ON u.id = c.user_id{where_sql}
+            ORDER BY c.updated_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            tuple(params) + (page_size, offset),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+        items = [
+            {
+                "id": r[0],
+                "title": r[1],
+                "user_id": r[2],
+                "username": r[3] or "",
+                "full_name": r[4] or r[3] or "",
+                "model_id": r[5],
+                "is_pinned": bool(r[6]),
+                "messages_count": r[7],
+                "last_message_preview": r[8],
+                "created_at": r[9],
+                "updated_at": r[10],
+            }
+            for r in rows
+        ]
+        return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+    @staticmethod
+    def admin_get_conversation_detail(conversation_id: str) -> Dict[str, Any]:
+        """Full conversation + messages for the admin panel (no ownership check)."""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT c.*, u.username, u.first_name || ' ' || u.last_name AS full_name
+            FROM conversations c
+            LEFT JOIN users u ON u.id = c.user_id
+            WHERE c.id = ?
+            """,
+            (conversation_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            from app.core.exceptions import NotFoundError
+            raise NotFoundError("مکالمه یافت نشد.")
+
+        detail = {
+            "id": row["id"],
+            "title": row["title"],
+            "user_id": row["user_id"],
+            "username": row["username"] or "",
+            "full_name": row["full_name"] or row["username"] or "",
+            "model_id": row["model_id"],
+            "is_pinned": bool(row["is_pinned"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+        cursor.execute(
+            """
+            SELECT id, sender_role, content, model_id, input_tokens, output_tokens,
+                   processing_time_sec, created_at
+            FROM messages WHERE conversation_id = ? ORDER BY created_at ASC
+            """,
+            (conversation_id,),
+        )
+        detail["messages"] = [
+            {
+                "id": m["id"],
+                "sender_role": m["sender_role"],
+                "content": m["content"],
+                "model_id": m["model_id"],
+                "input_tokens": m["input_tokens"],
+                "output_tokens": m["output_tokens"],
+                "processing_time_sec": m["processing_time_sec"],
+                "created_at": m["created_at"],
+            }
+            for m in cursor.fetchall()
+        ]
+        conn.close()
+        return detail
+
 chat_service = ChatService()

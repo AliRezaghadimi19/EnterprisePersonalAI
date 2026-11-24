@@ -181,14 +181,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, 4200);
   }, []);
 
-  const value = useCallback<ToastContextValue>(
-    {
-      success: (m) => push('success', m),
-      error: (m) => push('error', m),
-      info: (m) => push('info', m),
-    },
-    [push]
-  );
+  const value: ToastContextValue = {
+    success: (m: string) => push('success', m),
+    error: (m: string) => push('error', m),
+    info: (m: string) => push('info', m),
+  };
 
   return (
     <ToastContext.Provider value={value}>

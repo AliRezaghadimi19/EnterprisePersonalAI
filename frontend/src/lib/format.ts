@@ -19,7 +19,7 @@ export function fmtDate(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
   try {
-    return formatJalaliDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    return formatJalaliDate(d);
   } catch {
     return '—';
   }

@@ -162,28 +162,28 @@ export const api = {
   users: {
     list: (params?: Record<string, string | number | undefined>) => {
       const qs = buildQuery(params);
-      return apiGet<unknown>(`/users${qs}`).then((d) => normalizeList<import('@/types').AdminUserListItem>(d, ['users']));
+      return apiGet<unknown>(`/users${qs}`).then((d) => normalizeList<import('@/types/entities').AdminUserListItem>(d, ['users']));
     },
-    get: (id: string) => apiGet<import('@/types').AdminUserListItem>(`/users/${id}`),
+    get: (id: string) => apiGet<import('@/types/entities').AdminUserListItem>(`/users/${id}`),
     create: (body: Record<string, unknown>) => apiSend('/users', 'POST', body),
     update: (id: string, body: Record<string, unknown>) => apiSend(`/users/${id}`, 'PUT', body),
     remove: (id: string) => apiSend(`/users/${id}`, 'DELETE'),
   },
   groups: {
-    list: () => apiGet<unknown>('/groups').then((d) => normalizeList<import('@/types').AdminGroup>(d, ['groups'])),
-    get: (id: string) => apiGet<import('@/types').AdminGroup>(`/groups/${id}`),
+    list: () => apiGet<unknown>('/groups').then((d) => normalizeList<import('@/types/entities').AdminGroup>(d, ['groups'])),
+    get: (id: string) => apiGet<import('@/types/entities').AdminGroup>(`/groups/${id}`),
     create: (body: Record<string, unknown>) => apiSend('/groups', 'POST', body),
     update: (id: string, body: Record<string, unknown>) => apiSend(`/groups/${id}`, 'PUT', body),
     remove: (id: string) => apiSend(`/groups/${id}`, 'DELETE'),
   },
   roles: {
-    list: () => apiGet<unknown>('/roles').then((d) => normalizeList<import('@/types').AdminRole>(d, ['roles'])),
+    list: () => apiGet<unknown>('/roles').then((d) => normalizeList<import('@/types/entities').AdminRole>(d, ['roles'])),
     create: (body: Record<string, unknown>) => apiSend('/roles', 'POST', body),
     update: (id: string, body: Record<string, unknown>) => apiSend(`/roles/${id}`, 'PUT', body),
     remove: (id: string) => apiSend(`/roles/${id}`, 'DELETE'),
   },
   providers: {
-    list: () => apiGet<unknown>('/ai-providers').then((d) => normalizeList<import('@/types').AdminProvider>(d, ['providers'])),
+    list: () => apiGet<unknown>('/ai-providers').then((d) => normalizeList<import('@/types/entities').AdminProvider>(d, ['providers'])),
     create: (body: Record<string, unknown>) => apiSend('/ai-providers', 'POST', body),
     update: (id: string, body: Record<string, unknown>) => apiSend(`/ai-providers/${id}`, 'PUT', body),
     remove: (id: string) => apiSend(`/ai-providers/${id}`, 'DELETE'),
@@ -192,7 +192,7 @@ export const api = {
   models: {
     list: (onlyActive?: boolean) => {
       const qs = onlyActive !== undefined ? `?only_active=${onlyActive}` : '';
-      return apiGet<unknown>(`/ai-models${qs}`).then((d) => normalizeList<import('@/types').AdminModel>(d, ['models']));
+      return apiGet<unknown>(`/ai-models${qs}`).then((d) => normalizeList<import('@/types/entities').AdminModel>(d, ['models']));
     },
     create: (body: Record<string, unknown>) => apiSend('/ai-models', 'POST', body),
     update: (id: string, body: Record<string, unknown>) => apiSend(`/ai-models/${id}`, 'PUT', body),
@@ -202,16 +202,16 @@ export const api = {
   },
   knowledge: {
     categories: {
-      list: () => apiGet<unknown>('/knowledge/categories').then((d) => normalizeList<import('@/types').KnowledgeCategory>(d, ['categories'])),
+      list: () => apiGet<unknown>('/knowledge/categories').then((d) => normalizeList<import('@/types/entities').KnowledgeCategory>(d, ['categories'])),
       create: (body: Record<string, unknown>) => apiSend('/knowledge/categories', 'POST', body),
       remove: (id: string) => apiSend(`/knowledge/categories/${id}`, 'DELETE'),
     },
     documents: {
       list: (params?: Record<string, string | number | undefined>) => {
         const qs = buildQuery(params);
-        return apiGet<unknown>(`/knowledge/documents${qs}`).then((d) => normalizeList<import('@/types').KnowledgeDocument>(d, ['documents']));
+        return apiGet<unknown>(`/knowledge/documents${qs}`).then((d) => normalizeList<import('@/types/entities').KnowledgeDocument>(d, ['documents']));
       },
-      get: (id: string) => apiGet<import('@/types').KnowledgeDocument>(`/knowledge/documents/${id}`),
+      get: (id: string) => apiGet<import('@/types/entities').KnowledgeDocument>(`/knowledge/documents/${id}`),
       create: (body: Record<string, unknown>) => apiSend('/knowledge/documents', 'POST', body),
       update: (id: string, body: Record<string, unknown>) => apiSend(`/knowledge/documents/${id}`, 'PUT', body),
       remove: (id: string) => apiSend(`/knowledge/documents/${id}`, 'DELETE'),

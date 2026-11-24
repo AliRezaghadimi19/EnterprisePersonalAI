@@ -14,6 +14,7 @@ from app.api.v1.ai_providers import router as ai_providers_router
 from app.api.v1.ai_models import router as ai_models_router
 from app.api.v1.knowledge import router as knowledge_router
 from app.api.v1.chat import router as chat_router
+from app.api.v1.admin import router as admin_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
@@ -26,3 +27,4 @@ api_router.include_router(ai_providers_router)
 api_router.include_router(ai_models_router)
 api_router.include_router(knowledge_router)
 api_router.include_router(chat_router)
+api_router.include_router(admin_router)

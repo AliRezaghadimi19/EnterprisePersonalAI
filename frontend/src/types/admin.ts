@@ -14,12 +14,14 @@ export interface DashboardTotals {
 }
 
 export interface MessagesPerDay {
+  [key: string]: string | number;
   date: string;
   count: number;
   tokens: number;
 }
 
 export interface MessagesPerModel {
+  [key: string]: string | number | undefined;
   model_id: string;
   model_name: string;
   count: number;
@@ -27,12 +29,14 @@ export interface MessagesPerModel {
 }
 
 export interface UsersPerGroup {
+  [key: string]: string | number | undefined;
   group_id: string;
   group_name: string;
   count: number;
 }
 
 export interface PolicyDistribution {
+  [key: string]: string | number;
   policy: string;
   count: number;
 }
@@ -52,7 +56,7 @@ export interface DashboardStats {
   policy_distribution: PolicyDistribution[];
   top_users: TopUser[];
   auth_types: { LOCAL: number; ACTIVE_DIRECTORY: number };
-  token_usage: { today: number; month: number; estimated_cost: number };
+  token_usage: { today: number; month: number; estimated_cost: number; questions_today: number; questions_month: number };
 }
 
 export interface AuditLogEntry {
